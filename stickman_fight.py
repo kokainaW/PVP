@@ -74,13 +74,15 @@ class Character:
             self.y = self.ground_level
 
     def jump_over(self, opponent, keys):
-        # Jump over opponent if they are close
+        # Jump over opponent if they are close and jump key is pressed
         if abs(self.x - opponent.x) < 60 and self.y == self.ground_level:
             if keys[pygame.K_w]:  # If the player presses the up key
-                if self.x < opponent.x and keys[pygame.K_d]:  # Right direction
+                if self.x < opponent.x and keys[pygame.K_d]:  # Right direction (jump over)
                     self.is_jumping = True
-                elif self.x > opponent.x and keys[pygame.K_a]:  # Left direction
+                    self.x += 50  # Move a bit to the right after jump
+                elif self.x > opponent.x and keys[pygame.K_a]:  # Left direction (jump over)
                     self.is_jumping = True
+                    self.x -= 50  # Move a bit to the left after jump
 
     def take_damage(self):
         if self.health > 0:

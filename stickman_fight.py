@@ -12,144 +12,150 @@ pygame.display.set_caption("Stickman Fight")
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-BLUE = (0, 0, 255)
+RED = (255, 0, 0)  # CPU character
+BLUE = (0, 0, 255)  # Player character
+GREEN = (0, 255, 0)
 
 # Clock and FPS
 clock = pygame.time.Clock()
 FPS = 60
 
-# Stickman dimensions
-STICKMAN_WIDTH = 10
-STICKMAN_HEIGHT = 50
+# Create placeholders for the characters directly in Pygame
+male_character = pygame.Surface((50, 100))
+male_character.fill(BLUE)  # Male character represented as a blue rectangle
 
-# Initialize fonts
-font = pygame.font.SysFont("Arial", 24)
+female_character = pygame.Surface((50, 100))
+female_character.fill(RED)  # Female character represented as a red rectangle
 
-# Player class
-class Stickman:
-    def __init__(self, x, y, color):
+# Draw health bars and labels
+def draw_health_bar(stickman, x, y, label):
+    pygame.draw.rect(screen, RED, (x, y, 100, 10))  # Background (red for full damage)
+    pygame.draw.rect(screen, GREEN, (x, y, stickman.health, 10))  # Health (green for remaining health)
+    font = pygame.font.SysFont(None, 24)
+    label_text = font.render(label, True, BLACK)
+    screen.blit(label_text, (x, y + 15))
+
+class Character:
+    def __init__(self, x, y, image, health=100):
         self.x = x
         self.y = y
-        self.width = STICKMAN_WIDTH
-        self.height = STICKMAN_HEIGHT
-        self.color = color
-        self.health = 100
+        self.image = image
+        self.health = health
         self.vel = 5
-        self.attack = False
-        self.direction = 1  # 1 = right, -1 = left
+        self.is_jumping = False
+        self.jump_count = 10
+        self.ground_level = y  # Initial y position as ground level
 
     def draw(self):
-        # Draw body
-        pygame.draw.rect(screen, self.color, (self.x, self.y, self.width, self.height))
-        # Draw head
-        pygame.draw.circle(screen, self.color, (self.x + self.width // 2, self.y - 10), 10)
-        # Draw attack (hand or leg)
-        if self.attack:
-            pygame.draw.line(screen, RED, (self.x + self.width // 2, self.y + 10),
-                             (self.x + self.width // 2 + self.direction * 20, self.y + 10), 5)
+        screen.blit(self.image, (self.x, self.y))
 
-    def move(self, keys, up, left, down, right):
-        if keys[left]:
-            self.x -= self.vel
-            self.direction = -1
-        if keys[right]:
-            self.x += self.vel
-            self.direction = 1
-        if keys[up]:
-            self.y -= self.vel
-        if keys[down]:
-            self.y += self.vel
-
-        # Boundaries
-        self.x = max(0, min(WIDTH - self.width, self.x))
-        self.y = max(50, min(HEIGHT - self.height, self.y))
-
-    def attack_move(self):
-        self.attack = True
-
-    def reset_attack(self):
-        self.attack = False
-
-# CPU-controlled stickman
-class CPUStickman(Stickman):
-    def auto_move(self, player):
-        if player.x > self.x:
-            self.x += self.vel // 2
-            self.direction = 1
-        elif player.x < self.x:
-            self.x -= self.vel // 2
-            self.direction = -1
-
-        if player.y > self.y:
-            self.y += self.vel // 2
-        elif player.y < self.y:
-            self.y -= self.vel // 2
+    def move(self, keys, controls):
+        if keys:
+            if keys[controls['left']]:
+                self.x -= self.vel
+            if keys[controls['right']]:
+                self.x += self.vel
+            if not self.is_jumping and keys[controls['up']]:
+                self.is_jumping = True
+        
+        # Handle jumping mechanics
+        if self.is_jumping:
+            if self.jump_count >= -10:
+                neg = 1 if self.jump_count > 0 else -1
+                self.y -= (self.jump_count ** 2) * 0.5 * neg
+                self.jump_count -= 1
+            else:
+                self.is_jumping = False
+                self.jump_count = 10
 
         # Boundaries
-        self.x = max(0, min(WIDTH - self.width, self.x))
-        self.y = max(50, min(HEIGHT - self.height, self.y))
+        self.x = max(0, min(WIDTH - self.image.get_width(), self.x))
+        if not self.is_jumping:
+            self.y = self.ground_level
 
-# Initialize player and CPU
-player = Stickman(100, HEIGHT - 100, BLUE)
-cpu = CPUStickman(WIDTH - 200, HEIGHT - 100, BLACK)
+    def jump_over(self, opponent, keys):
+        # Jump over opponent if they are close
+        if abs(self.x - opponent.x) < 60 and self.y == self.ground_level:
+            if keys[pygame.K_w]:  # If the player presses the up key
+                if self.x < opponent.x and keys[pygame.K_d]:  # Right direction
+                    self.is_jumping = True
+                elif self.x > opponent.x and keys[pygame.K_a]:  # Left direction
+                    self.is_jumping = True
 
-# Main game loop
+    def take_damage(self):
+        if self.health > 0:
+            self.health -= 10
+
+# Initialize player and CPU characters
+player = Character(200, HEIGHT - 110, male_character)
+cpu = Character(600, HEIGHT - 110, female_character)
+
+# Controls mapping for players
+player_controls = {
+    'up': pygame.K_w,
+    'left': pygame.K_a,
+    'right': pygame.K_d
+}
+
+# Game loop
 running = True
 while running:
     clock.tick(FPS)
     screen.fill(WHITE)
 
-    # Draw health bars
-    pygame.draw.rect(screen, RED, (50, 20, player.health * 2, 20))
-    pygame.draw.rect(screen, RED, (WIDTH - 250, 20, cpu.health * 2, 20))
-
-    # Event handling
-    keys = pygame.key.get_pressed()
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
 
+    # Get key states
+    keys = pygame.key.get_pressed()
+
     # Player movement
-    player.move(keys, pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d)
+    player.move(keys, player_controls)
 
-    # Player attacks
-    if keys[pygame.K_j]:
-        player.attack_move()
+    # CPU movement (randomized for demonstration)
+    cpu_actions = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP]
+    cpu_key = random.choice(cpu_actions)
+
+    # Ensure the CPU controls are properly defined
+    if cpu_key == pygame.K_LEFT:
+        cpu_controls = {'left': pygame.K_LEFT, 'right': False, 'up': False}
+    elif cpu_key == pygame.K_RIGHT:
+        cpu_controls = {'left': False, 'right': pygame.K_RIGHT, 'up': False}
+    elif cpu_key == pygame.K_UP:
+        cpu_controls = {'left': False, 'right': False, 'up': pygame.K_UP}
     else:
-        player.reset_attack()
+        cpu_controls = {'left': False, 'right': False, 'up': False}  # Default if no valid key
 
-    # CPU movement
-    cpu.auto_move(player)
+    # Move CPU with the valid control dictionary
+    cpu.move(keys, cpu_controls)
 
-    # CPU attacks randomly
-    if random.randint(0, 50) == 1:
-        cpu.attack_move()
-    else:
-        cpu.reset_attack()
+    # Prevent overlap of players
+    if abs(player.x - cpu.x) < 50:
+        if player.x < cpu.x:
+            player.x -= player.vel
+            cpu.x += cpu.vel
+        else:
+            player.x += player.vel
+            cpu.x -= cpu.vel
 
-    # Collision detection for attacks
-    if player.attack and abs(player.x - cpu.x) < 30 and abs(player.y - cpu.y) < 50:
-        cpu.health -= 1
+    # Player jump over CPU
+    player.jump_over(cpu, keys)
 
-    if cpu.attack and abs(cpu.x - player.x) < 30 and abs(cpu.y - player.y) < 50:
-        player.health -= 1
-
-    # Draw stickmen
+    # Draw characters
     player.draw()
     cpu.draw()
 
+    # Draw health bars and labels
+    draw_health_bar(player, 50, 20, "Player 1")
+    draw_health_bar(cpu, WIDTH - 150, 20, "Player 2")
+
     # Check for game over
     if player.health <= 0 or cpu.health <= 0:
-        winner = "Player" if player.health > 0 else "CPU"
-        text = font.render(f"{winner} Wins!", True, BLACK)
-        screen.blit(text, (WIDTH // 2 - text.get_width() // 2, HEIGHT // 2))
-        pygame.display.update()
-        pygame.time.wait(3000)
+        winner = "Player 1" if cpu.health <= 0 else "Player 2"
         running = False
 
-    # Update display
-    pygame.display.update()
+    pygame.display.flip()
 
 pygame.quit()
 

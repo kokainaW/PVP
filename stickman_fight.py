@@ -20,12 +20,17 @@ GREEN = (0, 255, 0)
 clock = pygame.time.Clock()
 FPS = 60
 
-# Create placeholders for the characters directly in Pygame
-male_character = pygame.Surface((50, 100))
-male_character.fill(BLUE)  # Male character represented as a blue rectangle
-
-female_character = pygame.Surface((50, 100))
-female_character.fill(RED)  # Female character represented as a red rectangle
+# Load character images
+try:
+    male_character = pygame.image.load("/home/irobot/Desktop/git/PVP/images/male_character.png").convert_alpha()
+    female_character = pygame.image.load("/home/irobot/Desktop/git/PVP/images/female_character.png").convert_alpha()
+    print("Images loaded successfully.")
+except pygame.error as e:
+    print(f"Error loading images: {e}")
+    male_character = pygame.Surface((50, 100))  # Fallback to placeholder
+    male_character.fill(BLUE)
+    female_character = pygame.Surface((50, 100))  # Fallback to placeholder
+    female_character.fill(RED)
 
 # Draw health bars and labels
 def draw_health_bar(stickman, x, y, label):
@@ -73,16 +78,9 @@ class Character:
         if not self.is_jumping:
             self.y = self.ground_level
 
-    def jump_over(self, opponent, keys):
-        # Jump over opponent if they are close and jump key is pressed
+    def jump_over(self, opponent):
         if abs(self.x - opponent.x) < 60 and self.y == self.ground_level:
-            if keys[pygame.K_w]:  # If the player presses the up key
-                if self.x < opponent.x and keys[pygame.K_d]:  # Right direction (jump over)
-                    self.is_jumping = True
-                    self.x += 50  # Move a bit to the right after jump
-                elif self.x > opponent.x and keys[pygame.K_a]:  # Left direction (jump over)
-                    self.is_jumping = True
-                    self.x -= 50  # Move a bit to the left after jump
+            self.is_jumping = True
 
     def take_damage(self):
         if self.health > 0:
@@ -118,19 +116,17 @@ while running:
     # CPU movement (randomized for demonstration)
     cpu_actions = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP]
     cpu_key = random.choice(cpu_actions)
+    
+    # Map CPU actions to controls
+    cpu_controls = {
+        pygame.K_LEFT: {'left': True, 'right': False, 'up': False},
+        pygame.K_RIGHT: {'left': False, 'right': True, 'up': False},
+        pygame.K_UP: {'left': False, 'right': False, 'up': True}
+    }
 
-    # Ensure the CPU controls are properly defined
-    if cpu_key == pygame.K_LEFT:
-        cpu_controls = {'left': pygame.K_LEFT, 'right': False, 'up': False}
-    elif cpu_key == pygame.K_RIGHT:
-        cpu_controls = {'left': False, 'right': pygame.K_RIGHT, 'up': False}
-    elif cpu_key == pygame.K_UP:
-        cpu_controls = {'left': False, 'right': False, 'up': pygame.K_UP}
-    else:
-        cpu_controls = {'left': False, 'right': False, 'up': False}  # Default if no valid key
-
-    # Move CPU with the valid control dictionary
-    cpu.move(keys, cpu_controls)
+    # Fix: Always pass a valid dictionary for controls, with default False values
+    controls = cpu_controls.get(cpu_key, {'left': False, 'right': False, 'up': False})
+    cpu.move(keys, controls)
 
     # Prevent overlap of players
     if abs(player.x - cpu.x) < 50:
@@ -142,7 +138,13 @@ while running:
             cpu.x -= cpu.vel
 
     # Player jump over CPU
-    player.jump_over(cpu, keys)
+    if keys[pygame.K_w]:
+        player.jump_over(cpu)
+
+    # CPU jump over player
+    if cpu.x < player.x and abs(cpu.x - player.x) < 60:
+        if keys[pygame.K_UP]:
+            cpu.jump_over(player)
 
     # Draw characters
     player.draw()

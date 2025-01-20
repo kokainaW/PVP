@@ -5,104 +5,93 @@ import random
 pygame.init()
 
 # Screen dimensions
-WIDTH, HEIGHT = 800, 600
+WIDTH, HEIGHT = 800, 400
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Stickman Fight")
 
 # Colors
 WHITE = (255, 255, 255)
+RED = (255, 0, 0)
+BLUE = (0, 0, 255)
 BLACK = (0, 0, 0)
-RED = (255, 0, 0)  # CPU character
-BLUE = (0, 0, 255)  # Player character
-GREEN = (0, 255, 0)
 
 # Clock and FPS
 clock = pygame.time.Clock()
 FPS = 60
 
+# Load background image and scale it
+background_image = pygame.image.load("images/background.jpg").convert()
+background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
+
 # Load character images
-try:
-    male_character = pygame.image.load("/home/irobot/Desktop/git/PVP/images/male_character.png").convert_alpha()
-    female_character = pygame.image.load("/home/irobot/Desktop/git/PVP/images/female_character.png").convert_alpha()
-    print("Images loaded successfully.")
-except pygame.error as e:
-    print(f"Error loading images: {e}")
-    male_character = pygame.Surface((50, 100))  # Fallback to placeholder
-    male_character.fill(BLUE)
-    female_character = pygame.Surface((50, 100))  # Fallback to placeholder
-    female_character.fill(RED)
+male_character_image = pygame.image.load("images/male_character.png").convert_alpha()
+female_character_image = pygame.image.load("images/female_character.png").convert_alpha()
 
-# Draw health bars and labels
-def draw_health_bar(stickman, x, y, label):
-    pygame.draw.rect(screen, RED, (x, y, 100, 10))  # Background (red for full damage)
-    pygame.draw.rect(screen, GREEN, (x, y, stickman.health, 10))  # Health (green for remaining health)
-    font = pygame.font.SysFont(None, 24)
-    label_text = font.render(label, True, BLACK)
-    screen.blit(label_text, (x, y + 15))
-
+# Character class
 class Character:
-    def __init__(self, x, y, image, health=100):
+    def __init__(self, x, y, image, color):
         self.x = x
         self.y = y
-        self.image = image
-        self.health = health
+        self.width = 50
+        self.height = 100
         self.vel = 5
+        self.jump_vel = 10
         self.is_jumping = False
-        self.jump_count = 10
-        self.ground_level = y  # Initial y position as ground level
+        self.health = 100
+        self.image = pygame.transform.scale(image, (50, 100))
+        self.color = color
 
     def draw(self):
         screen.blit(self.image, (self.x, self.y))
 
     def move(self, keys, controls):
-        if keys:
-            if keys[controls['left']]:
-                self.x -= self.vel
-            if keys[controls['right']]:
-                self.x += self.vel
-            if not self.is_jumping and keys[controls['up']]:
-                self.is_jumping = True
-        
-        # Handle jumping mechanics
-        if self.is_jumping:
-            if self.jump_count >= -10:
-                neg = 1 if self.jump_count > 0 else -1
-                self.y -= (self.jump_count ** 2) * 0.5 * neg
-                self.jump_count -= 1
-            else:
-                self.is_jumping = False
-                self.jump_count = 10
-
-        # Boundaries
-        self.x = max(0, min(WIDTH - self.image.get_width(), self.x))
+        if controls['left'] and keys[controls['left']] and self.x > 0:
+            self.x -= self.vel
+        if controls['right'] and keys[controls['right']] and self.x < WIDTH - self.width:
+            self.x += self.vel
         if not self.is_jumping:
-            self.y = self.ground_level
+            if controls['up'] and keys[controls['up']]:
+                self.is_jumping = True
+        else:
+            self.y -= self.jump_vel
+            self.jump_vel -= 1
+            if self.jump_vel < -10:
+                self.is_jumping = False
+                self.jump_vel = 10
 
-    def jump_over(self, opponent):
-        if abs(self.x - opponent.x) < 60 and self.y == self.ground_level:
-            self.is_jumping = True
+    def jump_over(self, other):
+        if self.x < other.x:
+            self.x -= self.vel
+            self.y -= self.vel
+        else:
+            self.x += self.vel
+            self.y -= self.vel
 
-    def take_damage(self):
-        if self.health > 0:
-            self.health -= 10
+# Health bar drawing function
+def draw_health_bar(character, x, y, name):
+    pygame.draw.rect(screen, BLACK, (x, y, 104, 24))
+    pygame.draw.rect(screen, RED if character.color == RED else BLUE, (x + 2, y + 2, character.health, 20))
+    font = pygame.font.SysFont(None, 20)
+    text = font.render(name, True, WHITE)
+    screen.blit(text, (x, y - 20))
 
-# Initialize player and CPU characters
-player = Character(200, HEIGHT - 110, male_character)
-cpu = Character(600, HEIGHT - 110, female_character)
+# Create characters
+player = Character(100, HEIGHT - 120, male_character_image, RED)
+cpu = Character(WIDTH - 150, HEIGHT - 120, female_character_image, BLUE)
 
-# Controls mapping for players
-player_controls = {
-    'up': pygame.K_w,
-    'left': pygame.K_a,
-    'right': pygame.K_d
-}
+# Controls
+player_controls = {'left': pygame.K_a, 'right': pygame.K_d, 'up': pygame.K_w}
+cpu_controls = {'left': pygame.K_LEFT, 'right': pygame.K_RIGHT, 'up': pygame.K_UP}
 
 # Game loop
 running = True
 while running:
     clock.tick(FPS)
-    screen.fill(WHITE)
 
+    # Draw background
+    screen.blit(background_image, (0, 0))
+
+    # Handle events
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
@@ -113,20 +102,11 @@ while running:
     # Player movement
     player.move(keys, player_controls)
 
-    # CPU movement (randomized for demonstration)
-    cpu_actions = [pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP]
+    # CPU random movement
+    cpu_actions = ['left', 'right', 'up']
     cpu_key = random.choice(cpu_actions)
-    
-    # Map CPU actions to controls
-    cpu_controls = {
-        pygame.K_LEFT: {'left': True, 'right': False, 'up': False},
-        pygame.K_RIGHT: {'left': False, 'right': True, 'up': False},
-        pygame.K_UP: {'left': False, 'right': False, 'up': True}
-    }
-
-    # Fix: Always pass a valid dictionary for controls, with default False values
-    controls = cpu_controls.get(cpu_key, {'left': False, 'right': False, 'up': False})
-    cpu.move(keys, controls)
+    cpu_controls_state = {key: (cpu_controls[key] if key == cpu_key else None) for key in cpu_actions}
+    cpu.move(keys, cpu_controls_state)
 
     # Prevent overlap of players
     if abs(player.x - cpu.x) < 50:
@@ -137,28 +117,15 @@ while running:
             player.x += player.vel
             cpu.x -= cpu.vel
 
-    # Player jump over CPU
-    if keys[pygame.K_w]:
-        player.jump_over(cpu)
-
-    # CPU jump over player
-    if cpu.x < player.x and abs(cpu.x - player.x) < 60:
-        if keys[pygame.K_UP]:
-            cpu.jump_over(player)
-
     # Draw characters
     player.draw()
     cpu.draw()
 
-    # Draw health bars and labels
+    # Draw health bars
     draw_health_bar(player, 50, 20, "Player 1")
     draw_health_bar(cpu, WIDTH - 150, 20, "Player 2")
 
-    # Check for game over
-    if player.health <= 0 or cpu.health <= 0:
-        winner = "Player 1" if cpu.health <= 0 else "Player 2"
-        running = False
-
+    # Update display
     pygame.display.flip()
 
 pygame.quit()
